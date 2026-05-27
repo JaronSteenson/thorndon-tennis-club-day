@@ -23,7 +23,7 @@ export function RosterPanel() {
   }, [players, presentSet, query]);
 
   return (
-    <section className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+    <section className="flex flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold uppercase tracking-wider">Roster</h2>
         <div className="flex flex-1 items-center justify-end gap-2">
@@ -35,10 +35,11 @@ export function RosterPanel() {
             data-testid="roster-search"
           />
           <QuickAddDialog />
+          <FinishDayDialog />
         </div>
       </header>
       <div
-        className="flex flex-wrap gap-2 max-h-[260px] overflow-y-auto pr-1"
+        className="flex flex-wrap gap-2 max-h-[160px] overflow-y-auto pr-1"
         data-testid="roster-list"
       >
         {filtered.length === 0 ? (
@@ -48,9 +49,6 @@ export function RosterPanel() {
             <PlayerChip key={p.id} player={p} location={{ kind: 'roster' }} />
           ))
         )}
-      </div>
-      <div className="flex justify-end pt-2">
-        <FinishDayDialog />
       </div>
     </section>
   );

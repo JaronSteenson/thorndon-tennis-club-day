@@ -60,10 +60,10 @@ export default function Page() {
 
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <main className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col gap-4 p-4">
+      <main className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col gap-2 p-3">
         <Header />
         <section
-          className="grid gap-4"
+          className="grid gap-3"
           style={{ gridTemplateColumns: `repeat(${courts.length}, minmax(0, 1fr))` }}
         >
           {courts.map((c) => (

@@ -101,6 +101,36 @@ describe('store', () => {
     expect(added.isVisitor).toBe(true);
   });
 
+  it('finishGame stamps lastOnCourtAt for each finishing player', () => {
+    const players = useTennisStore.getState().players;
+    const ids = players.slice(0, 4).map((p) => p.id);
+    for (const id of ids) useTennisStore.getState().assignToCourt('court-3', id);
+    const before = Date.now();
+    useTennisStore.getState().finishGame('court-3');
+    const stamps = useTennisStore.getState().day.lastOnCourtAt;
+    for (const id of ids) {
+      expect(stamps[id]).toBeGreaterThanOrEqual(before);
+    }
+  });
+
+  it('sort by lastOnCourtAt puts most-recently-played at the end', () => {
+    const players = useTennisStore.getState().players;
+    const [a, b, c, d, e, f, g, h] = players.slice(0, 8).map((p) => p.id);
+
+    // First game finishes
+    for (const id of [a, b, c, d]) useTennisStore.getState().assignToCourt('court-3', id);
+    useTennisStore.getState().finishGame('court-3');
+
+    // Second game finishes a moment later
+    for (const id of [e, f, g, h]) useTennisStore.getState().assignToCourt('court-3', id);
+    useTennisStore.getState().finishGame('court-3');
+
+    const stamps = useTennisStore.getState().day.lastOnCourtAt;
+    // Latest game's players have higher timestamps than the first game's players
+    expect(stamps[e]).toBeGreaterThanOrEqual(stamps[a]);
+    expect(stamps[h]).toBeGreaterThanOrEqual(stamps[d]);
+  });
+
   it('finishClubDay resets day state but keeps roster', () => {
     const players = useTennisStore.getState().players;
     const ids = players.slice(0, 4).map((p) => p.id);
@@ -114,6 +144,7 @@ describe('store', () => {
     expect(day.dutyManagerId).toBeUndefined();
     expect(day.allocations.every((a) => a.playerIds.length === 0)).toBe(true);
     expect(day.queues.every((q) => q.playerIds.length === 0)).toBe(true);
+    expect(day.lastOnCourtAt).toEqual({});
     expect(rosterAfter.length).toBe(players.length);
   });
 });

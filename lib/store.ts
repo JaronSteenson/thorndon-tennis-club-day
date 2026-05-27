@@ -43,6 +43,7 @@ const initialDay: DayState = {
     { courtId: 'court-4', playerIds: [] },
     { courtId: 'court-5', playerIds: [] },
   ],
+  lastOnCourtAt: {},
 };
 
 function ensureCourtSlots(courts: Court[], allocs: CourtAllocation[], queues: QueueEntry[]) {
@@ -96,6 +97,7 @@ export const useTennisStore = create<State>()(
             ...local.day,
             allocations: ensuredAllocs,
             queues: ensuredQueues,
+            lastOnCourtAt: local.day?.lastOnCourtAt ?? {},
           },
         });
       },
@@ -191,12 +193,14 @@ export const useTennisStore = create<State>()(
 
       finishGame: (courtId) =>
         set((s) => {
+          const finishedAt = Date.now();
+          const finishing = s.day.allocations.find((a) => a.courtId === courtId);
           const queue = s.day.queues.find((q) => q.courtId === courtId);
           const promote = queue && queue.playerIds.length === 4 ? queue.playerIds : null;
 
           const allocations = s.day.allocations.map((a) => {
             if (a.courtId !== courtId) return a;
-            if (promote) return { ...a, playerIds: promote, startedAt: Date.now() };
+            if (promote) return { ...a, playerIds: promote, startedAt: finishedAt };
             return { ...a, playerIds: [], startedAt: undefined };
           });
 
@@ -204,7 +208,12 @@ export const useTennisStore = create<State>()(
             q.courtId === courtId && promote ? { ...q, playerIds: [] } : q,
           );
 
-          return { day: { ...s.day, allocations, queues } };
+          const lastOnCourtAt = { ...s.day.lastOnCourtAt };
+          for (const id of finishing?.playerIds ?? []) {
+            lastOnCourtAt[id] = finishedAt;
+          }
+
+          return { day: { ...s.day, allocations, queues, lastOnCourtAt } };
         }),
 
       quickAddPlayer: (name, opts) => {
@@ -230,6 +239,7 @@ export const useTennisStore = create<State>()(
             ...initialDay,
             allocations: s.courts.map((c) => ({ courtId: c.id, playerIds: [] })),
             queues: s.courts.map((c) => ({ courtId: c.id, playerIds: [] })),
+            lastOnCourtAt: {},
           },
         })),
     }),

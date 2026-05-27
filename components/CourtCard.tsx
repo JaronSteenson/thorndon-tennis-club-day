@@ -30,7 +30,7 @@ export function CourtCard({ court }: Props) {
   const tabColor = court.color === 'blue' ? 'bg-court-blue' : 'bg-court-green';
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
+    <div className="flex flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <span className={cn('court-tab text-2xl', tabColor)}>{court.name}</span>
         <div className="text-3xl font-mono tabular-nums">
@@ -41,7 +41,7 @@ export function CourtCard({ court }: Props) {
       <DroppableZone
         id={`court-${court.id}`}
         data={{ kind: 'court', courtId: court.id }}
-        className="min-h-[120px] p-3"
+        className="min-h-[96px] p-2"
       >
         <div className="grid grid-cols-2 gap-2">
           {Array.from({ length: 4 }).map((_, idx) => {
@@ -51,7 +51,7 @@ export function CourtCard({ court }: Props) {
               <div
                 key={idx}
                 className={cn(
-                  'flex min-h-[44px] items-center justify-center rounded-md',
+                  'flex min-h-[40px] items-center justify-center rounded-md',
                   !player && 'border border-dashed border-neutral-300 text-neutral-400 text-sm',
                 )}
               >
@@ -69,7 +69,7 @@ export function CourtCard({ court }: Props) {
         </div>
       </DroppableZone>
 
-      <div className="flex items-center justify-between gap-3 pt-1">
+      <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
           Next
         </span>
@@ -88,9 +88,9 @@ export function CourtCard({ court }: Props) {
       <DroppableZone
         id={`queue-${court.id}`}
         data={{ kind: 'queue', courtId: court.id }}
-        className="min-h-[60px] p-2"
+        className="min-h-[52px] p-1.5"
       >
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           {Array.from({ length: 4 }).map((_, idx) => {
             const pid = queueIds[idx];
             const player = pid ? lookup.get(pid) : undefined;
@@ -98,7 +98,7 @@ export function CourtCard({ court }: Props) {
               <div
                 key={idx}
                 className={cn(
-                  'flex min-h-[36px] items-center justify-center rounded-md',
+                  'flex min-h-[32px] items-center justify-center rounded-md',
                   !player && 'border border-dashed border-neutral-300 text-neutral-400 text-xs',
                 )}
               >

@@ -28,4 +28,5 @@ export type DayState = {
   dutyManagerId?: string;
   allocations: CourtAllocation[];
   queues: QueueEntry[];
+  lastOnCourtAt: Record<string, number>;
 };

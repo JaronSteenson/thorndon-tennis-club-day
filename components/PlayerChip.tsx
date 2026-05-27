@@ -25,9 +25,10 @@ type Props = {
   player: Player;
   location: ChipLocation;
   size?: 'sm' | 'md' | 'lg';
+  hasPlayed?: boolean;
 };
 
-export function PlayerChip({ player, location, size = 'md' }: Props) {
+export function PlayerChip({ player, location, size = 'md', hasPlayed = false }: Props) {
   const dragId = `${locationToString(location)}::${player.id}`;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: dragId,
@@ -45,6 +46,8 @@ export function PlayerChip({ player, location, size = 'md' }: Props) {
       className={cn(
         'chip-base group relative pr-7 cursor-grab active:cursor-grabbing',
         player.isVisitor && 'chip-visitor',
+        hasPlayed && !player.isVisitor && 'chip-played',
+        hasPlayed && player.isVisitor && 'chip-played-visitor',
         size === 'sm' && 'text-sm px-2 py-1 pr-7',
         size === 'lg' && 'text-xl px-4 py-2 pr-9',
         isDragging && 'opacity-60',
