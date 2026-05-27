@@ -251,9 +251,3 @@ export function getCourtAllocation(state: State, courtId: string): CourtAllocati
 export function getCourtQueue(state: State, courtId: string): QueueEntry | undefined {
   return state.day.queues.find((q) => q.courtId === courtId);
 }
-
-export function selectAvailablePresent(state: State): string[] {
-  const onCourt = new Set(state.day.allocations.flatMap((a) => a.playerIds));
-  const inQueue = new Set(state.day.queues.flatMap((q) => q.playerIds));
-  return state.day.presentPlayerIds.filter((id) => !onCourt.has(id) && !inQueue.has(id));
-}

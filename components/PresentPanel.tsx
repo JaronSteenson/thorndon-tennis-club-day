@@ -1,18 +1,26 @@
 'use client';
 
 import * as React from 'react';
-import { useTennisStore, selectAvailablePresent } from '@/lib/store';
+import { useTennisStore } from '@/lib/store';
 import { PlayerChip } from './PlayerChip';
 import { DroppableZone } from './DroppableZone';
 
 export function PresentPanel() {
   const players = useTennisStore((s) => s.players);
-  const availableIds = useTennisStore(selectAvailablePresent);
+  const present = useTennisStore((s) => s.day.presentPlayerIds);
+  const allocations = useTennisStore((s) => s.day.allocations);
+  const queues = useTennisStore((s) => s.day.queues);
+
   const lookup = React.useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
-  const available = availableIds
-    .map((id) => lookup.get(id))
-    .filter((p): p is NonNullable<typeof p> => Boolean(p))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const available = React.useMemo(() => {
+    const onCourt = new Set(allocations.flatMap((a) => a.playerIds));
+    const inQueue = new Set(queues.flatMap((q) => q.playerIds));
+    return present
+      .filter((id) => !onCourt.has(id) && !inQueue.has(id))
+      .map((id) => lookup.get(id))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [present, allocations, queues, lookup]);
 
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-white p-4 shadow-sm">
