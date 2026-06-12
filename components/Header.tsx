@@ -23,6 +23,8 @@ export function Header() {
   const present = useTennisStore((s) => s.day.presentPlayerIds);
   const dutyManagerId = useTennisStore((s) => s.day.dutyManagerId);
   const setDutyManager = useTennisStore((s) => s.setDutyManager);
+  const mode = useTennisStore((s) => s.mode);
+  const setMode = useTennisStore((s) => s.setMode);
 
   const lookup = React.useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
   const presentPlayers = present
@@ -32,11 +34,11 @@ export function Header() {
   const dutyManager = dutyManagerId ? lookup.get(dutyManagerId) : undefined;
 
   return (
-    <header className="flex items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-white px-5 py-2 shadow-sm">
-      <h1 className="text-2xl font-extrabold uppercase tracking-wider">
+    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 shadow-sm sm:px-5">
+      <h1 className="text-lg font-extrabold uppercase tracking-wider sm:text-2xl">
         Thorndon Tennis Club Day
       </h1>
-      <div className="flex items-center gap-6">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-6">
         <div className="flex items-baseline gap-2">
           <span className="text-sm uppercase tracking-wide text-neutral-500">Duty manager</span>
           <DropdownMenu>
@@ -88,11 +90,19 @@ export function Header() {
           </DropdownMenu>
         </div>
         <div
-          className="rounded-md bg-neutral-900 px-3 py-1 text-3xl font-mono tabular-nums text-white"
+          className="rounded-md bg-neutral-900 px-3 py-1 font-mono text-xl tabular-nums text-white sm:text-3xl"
           aria-label="current time"
         >
           {formatClock(new Date(now))}
         </div>
+        <Button
+          variant="outline"
+          size="lg"
+          data-testid="mode-toggle"
+          onClick={() => setMode(mode === 'signin' ? 'allocation' : 'signin')}
+        >
+          {mode === 'signin' ? 'Back to board' : 'Sign-in'}
+        </Button>
       </div>
     </header>
   );

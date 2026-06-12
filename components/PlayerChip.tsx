@@ -16,7 +16,6 @@ import { useTennisStore } from '@/lib/store';
 import type { Player } from '@/lib/types';
 
 export type ChipLocation =
-  | { kind: 'roster' }
   | { kind: 'present' }
   | { kind: 'court'; courtId: string }
   | { kind: 'queue'; courtId: string };
@@ -44,11 +43,11 @@ export function PlayerChip({ player, location, size = 'md', hasPlayed = false }:
       ref={setNodeRef}
       style={style}
       className={cn(
-        'chip-base group relative pr-7 cursor-grab active:cursor-grabbing',
+        'chip-base group relative pr-8 cursor-grab active:cursor-grabbing',
         player.isVisitor && 'chip-visitor',
         hasPlayed && !player.isVisitor && 'chip-played',
         hasPlayed && player.isVisitor && 'chip-played-visitor',
-        size === 'sm' && 'text-sm px-2 py-1 pr-7',
+        size === 'sm' && 'text-sm px-2 py-1 pr-8',
         size === 'lg' && 'text-xl px-4 py-2 pr-9',
         isDragging && 'opacity-60',
       )}
@@ -64,7 +63,6 @@ export function PlayerChip({ player, location, size = 'md', hasPlayed = false }:
 
 function ChipMenu({ player, location }: { player: Player; location: ChipLocation }) {
   const courts = useTennisStore((s) => s.courts);
-  const markPresent = useTennisStore((s) => s.markPresent);
   const unmarkPresent = useTennisStore((s) => s.unmarkPresent);
   const assignToCourt = useTennisStore((s) => s.assignToCourt);
   const queueToCourt = useTennisStore((s) => s.queueToCourt);
@@ -81,7 +79,7 @@ function ChipMenu({ player, location }: { player: Player; location: ChipLocation
         <button
           aria-label={`Options for ${player.name}`}
           className={cn(
-            'absolute right-0.5 top-1/2 -translate-y-1/2 rounded p-0.5 opacity-60 hover:opacity-100',
+            'absolute right-0 top-1/2 -translate-y-1/2 rounded p-1.5 opacity-60 hover:opacity-100',
             player.isVisitor ? 'text-white' : 'text-black',
           )}
           onPointerDown={(e) => e.stopPropagation()}
@@ -92,12 +90,7 @@ function ChipMenu({ player, location }: { player: Player; location: ChipLocation
       <DropdownMenuContent align="end" className="min-w-[14rem]">
         <DropdownMenuLabel>{player.name}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {location.kind === 'roster' && (
-          <DropdownMenuItem onSelect={() => markPresent(player.id)}>
-            Add to today
-          </DropdownMenuItem>
-        )}
-        {(location.kind === 'present' || location.kind === 'roster') && (
+        {location.kind === 'present' && (
           <>
             {courts.map((c) => (
               <DropdownMenuItem
@@ -147,8 +140,6 @@ function ChipMenu({ player, location }: { player: Player; location: ChipLocation
 
 function locationToString(loc: ChipLocation): string {
   switch (loc.kind) {
-    case 'roster':
-      return 'roster';
     case 'present':
       return 'present';
     case 'court':

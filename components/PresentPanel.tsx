@@ -1,7 +1,10 @@
 'use client';
 
 import * as React from 'react';
+import { ListOrdered, Shuffle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useTennisStore } from '@/lib/store';
+import { compareByWait } from '@/lib/playerSort';
 import { PlayerChip } from './PlayerChip';
 import { DroppableZone } from './DroppableZone';
 
@@ -11,6 +14,7 @@ export function PresentPanel() {
   const allocations = useTennisStore((s) => s.day.allocations);
   const queues = useTennisStore((s) => s.day.queues);
   const lastOnCourtAt = useTennisStore((s) => s.day.lastOnCourtAt);
+  const autoAssign = useTennisStore((s) => s.autoAssign);
 
   const lookup = React.useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
   const available = React.useMemo(() => {
@@ -20,12 +24,7 @@ export function PresentPanel() {
       .filter((id) => !onCourt.has(id) && !inQueue.has(id))
       .map((id) => lookup.get(id))
       .filter((p): p is NonNullable<typeof p> => Boolean(p))
-      .sort((a, b) => {
-        const ta = lastOnCourtAt[a.id] ?? 0;
-        const tb = lastOnCourtAt[b.id] ?? 0;
-        if (ta !== tb) return ta - tb;
-        return a.name.localeCompare(b.name);
-      });
+      .sort((a, b) => compareByWait(a, b, lastOnCourtAt));
   }, [present, allocations, queues, lookup, lastOnCourtAt]);
 
   return (
@@ -35,12 +34,34 @@ export function PresentPanel() {
           <h2 className="text-lg font-bold uppercase tracking-wider">Here today</h2>
           <Legend />
         </div>
-        <span className="text-sm text-neutral-500">{available.length} not on court</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-neutral-500">{available.length} not on court</span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={available.length === 0}
+            onClick={() => autoAssign('ordered')}
+            data-testid="auto-assign-ordered"
+          >
+            <ListOrdered className="h-4 w-4" />
+            Fill in order
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={available.length === 0}
+            onClick={() => autoAssign('random')}
+            data-testid="auto-assign-random"
+          >
+            <Shuffle className="h-4 w-4" />
+            Fill random
+          </Button>
+        </div>
       </header>
       <DroppableZone id="present" data={{ kind: 'present' }} className="min-h-[72px] p-2">
         {available.length === 0 ? (
           <p className="text-sm text-neutral-400">
-            Drag players here or use their menu → “Add to today”.
+            No-one waiting. Use “Sign-in” (top right) to mark players as here today.
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">

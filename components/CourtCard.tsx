@@ -8,6 +8,7 @@ import { useTennisStore } from '@/lib/store';
 import type { Court } from '@/lib/types';
 import { formatElapsed, useNowTick } from '@/lib/time';
 import { cn } from '@/lib/utils';
+import { ArrowUp } from 'lucide-react';
 
 type Props = { court: Court };
 
@@ -18,6 +19,7 @@ export function CourtCard({ court }: Props) {
   const queue = useTennisStore((s) => s.day.queues.find((q) => q.courtId === court.id));
   const players = useTennisStore((s) => s.players);
   const finishGame = useTennisStore((s) => s.finishGame);
+  const promoteQueue = useTennisStore((s) => s.promoteQueue);
   const now = useNowTick(1000);
 
   const lookup = React.useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
@@ -70,9 +72,28 @@ export function CourtCard({ court }: Props) {
       </DroppableZone>
 
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
-          Next
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+            Next
+          </span>
+          {queueIds.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={assignedIds.length + queueIds.length > 4}
+              title={
+                assignedIds.length + queueIds.length > 4
+                  ? 'Not enough free slots on the court'
+                  : undefined
+              }
+              onClick={() => promoteQueue(court.id)}
+              data-testid={`promote-${court.id}`}
+            >
+              <ArrowUp className="h-4 w-4" />
+              Play now
+            </Button>
+          )}
+        </div>
         {inPlay && (
           <Button
             size="sm"

@@ -12,13 +12,15 @@ import {
 import { Header } from '@/components/Header';
 import { CourtCard } from '@/components/CourtCard';
 import { PresentPanel } from '@/components/PresentPanel';
-import { RosterPanel } from '@/components/RosterPanel';
+import { SignInScreen } from '@/components/SignInScreen';
+import { UndoToast } from '@/components/UndoToast';
 import { useTennisStore } from '@/lib/store';
 
 export default function Page() {
   const hydrated = useTennisStore((s) => s.hydrated);
   const hydrateSeed = useTennisStore((s) => s.hydrateSeed);
   const courts = useTennisStore((s) => s.courts);
+  const mode = useTennisStore((s) => s.mode);
   const markPresent = useTennisStore((s) => s.markPresent);
   const assignToCourt = useTennisStore((s) => s.assignToCourt);
   const queueToCourt = useTennisStore((s) => s.queueToCourt);
@@ -60,19 +62,23 @@ export default function Page() {
 
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <main className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col gap-2 p-3">
+      <main className="mx-auto flex min-h-screen w-full max-w-[1920px] flex-col gap-2 p-2 sm:p-3">
         <Header />
-        <section
-          className="grid gap-3"
-          style={{ gridTemplateColumns: `repeat(${courts.length}, minmax(0, 1fr))` }}
-        >
-          {courts.map((c) => (
-            <CourtCard key={c.id} court={c} />
-          ))}
-        </section>
-        <PresentPanel />
-        <RosterPanel />
+        {mode === 'signin' ? (
+          <SignInScreen />
+        ) : (
+          <>
+            {/* Breakpoints assume the fixed set of 3 courts. */}
+            <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {courts.map((c) => (
+                <CourtCard key={c.id} court={c} />
+              ))}
+            </section>
+            <PresentPanel />
+          </>
+        )}
       </main>
+      <UndoToast />
     </DndContext>
   );
 }
