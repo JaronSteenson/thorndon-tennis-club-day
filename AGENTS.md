@@ -4,7 +4,7 @@ This is a **low-stakes, frontend-only** sports club app. The repo is safe for ag
 
 ## Preferences
 
-- **Commit and push from the agent**: Don't ask for permission or hand off to the user. This speeds up iteration and keeps the workflow clean.
+- **Commit and push straight to `master`**: This is the default for all work. Don't create feature branches or open PRs unless explicitly asked. Don't hand off to the user or wait for confirmation — commit and push directly.
 - **Exceptions**: Only ask the user for confirmation if you're unsure about:
   - Destructive operations (deleting functionality, major refactors that could break the UX)
   - Changes to GitHub Pages deployment config (`.github/workflows/`, `next.config.mjs` output/basePath)
@@ -21,7 +21,7 @@ This is a **low-stakes, frontend-only** sports club app. The repo is safe for ag
 1. Plan the work (ask questions if unclear on UX or requirements).
 2. Implement and test locally (`npm test`, `npm run e2e`, `npm run build`).
 3. Commit with a clear message ("Add X", "Fix Y", "Polish Z").
-4. Push to `master` or a feature branch (your choice based on scope).
+4. Push straight to `master`.
 5. Done — the GH Pages workflow redeploys on master push.
 
 No need to hand off or wait for confirmation unless you hit one of the exceptions above.
