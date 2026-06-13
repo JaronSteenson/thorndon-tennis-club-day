@@ -2,13 +2,19 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { Court, CourtAllocation, DayState, Player, QueueEntry } from './types';
+import type { Court, CourtAllocation, DayState, Player } from './types';
 import courtsSeed from '@/data/courts.json';
 import playersSeed from '@/data/players.json';
 import { mergeCourts, mergePlayers } from './seedMerge';
 import { compareByWait } from './playerSort';
+import { pickGroup, recordFoursome } from './matchups';
 
 export const STORAGE_KEY = 'tennis-day:v1';
+
+/** A foursome's worth of players; the queue is rendered as buckets this size. */
+export const BUCKET_SIZE = 4;
+/** How many upcoming buckets to always show, even when partly empty. */
+export const VISIBLE_BUCKETS = 3;
 
 export type BoardMode = 'allocation' | 'signin';
 
@@ -26,12 +32,14 @@ type Actions = {
   dismissUndo: () => void;
   markPresent: (playerId: string) => void;
   unmarkPresent: (playerId: string) => void;
+  takeBreak: (playerId: string) => void;
+  endBreak: (playerId: string) => void;
   setDutyManager: (playerId: string | undefined) => void;
   assignToCourt: (courtId: string, playerId: string) => void;
-  queueToCourt: (courtId: string, playerId: string) => void;
+  queuePlayer: (playerId: string, atIndex?: number) => void;
   removeFromCourt: (courtId: string, playerId: string) => void;
-  removeFromQueue: (courtId: string, playerId: string) => void;
-  promoteQueue: (courtId: string) => void;
+  removeFromQueue: (playerId: string) => void;
+  pullNextOntoCourt: (courtId: string) => void;
   autoAssign: (order: 'ordered' | 'random') => void;
   finishGame: (courtId: string) => void;
   quickAddPlayer: (name: string, opts?: { isVisitor?: boolean; markPresent?: boolean }) => Player;
@@ -49,28 +57,22 @@ type State = {
 
 const initialDay: DayState = {
   presentPlayerIds: [],
+  onBreakPlayerIds: [],
   dutyManagerId: undefined,
   allocations: [
     { courtId: 'court-3', playerIds: [] },
     { courtId: 'court-4', playerIds: [] },
     { courtId: 'court-5', playerIds: [] },
   ],
-  queues: [
-    { courtId: 'court-3', playerIds: [] },
-    { courtId: 'court-4', playerIds: [] },
-    { courtId: 'court-5', playerIds: [] },
-  ],
+  queue: [],
   lastOnCourtAt: {},
+  playedWith: {},
 };
 
-function ensureCourtSlots(courts: Court[], allocs: CourtAllocation[], queues: QueueEntry[]) {
-  const ensuredAllocs = courts.map(
+function ensureCourtSlots(courts: Court[], allocs: CourtAllocation[]) {
+  return courts.map(
     (c) => allocs.find((a) => a.courtId === c.id) ?? { courtId: c.id, playerIds: [] },
   );
-  const ensuredQueues = courts.map(
-    (c) => queues.find((q) => q.courtId === c.id) ?? { courtId: c.id, playerIds: [] },
-  );
-  return { ensuredAllocs, ensuredQueues };
 }
 
 function removeEverywhere(day: DayState, playerId: string): DayState {
@@ -81,11 +83,19 @@ function removeEverywhere(day: DayState, playerId: string): DayState {
       playerIds: a.playerIds.filter((id) => id !== playerId),
       startedAt: a.playerIds.includes(playerId) && a.playerIds.length === 4 ? undefined : a.startedAt,
     })),
-    queues: day.queues.map((q) => ({
-      ...q,
-      playerIds: q.playerIds.filter((id) => id !== playerId),
-    })),
+    queue: day.queue.filter((id) => id !== playerId),
+    onBreakPlayerIds: day.onBreakPlayerIds.filter((id) => id !== playerId),
   };
+}
+
+/**
+ * Pre-migration state stored `queues: { courtId, playerIds }[]`. Collapse any
+ * such legacy shape into a single ordered list so reloads don't lose the queue.
+ */
+function flattenLegacyQueues(day: unknown): string[] {
+  const legacy = (day as { queues?: { playerIds?: string[] }[] } | undefined)?.queues;
+  if (!Array.isArray(legacy)) return [];
+  return legacy.flatMap((q) => (Array.isArray(q.playerIds) ? q.playerIds : []));
 }
 
 function nameOf(players: Player[], playerId: string): string {
@@ -140,11 +150,7 @@ export const useTennisStore = create<State>()(
           const local = get();
           const mergedPlayers = mergePlayers(playersSeed as Player[], local.players ?? []);
           const mergedCourts = mergeCourts(courtsSeed as Court[], local.courts ?? []);
-          const { ensuredAllocs, ensuredQueues } = ensureCourtSlots(
-            mergedCourts,
-            local.day?.allocations ?? [],
-            local.day?.queues ?? [],
-          );
+          const ensuredAllocs = ensureCourtSlots(mergedCourts, local.day?.allocations ?? []);
           set({
             hydrated: true,
             courts: mergedCourts,
@@ -153,8 +159,13 @@ export const useTennisStore = create<State>()(
               ...initialDay,
               ...local.day,
               allocations: ensuredAllocs,
-              queues: ensuredQueues,
+              // Migrate older per-court `queues` state into the single ordered line.
+              queue: Array.isArray(local.day?.queue)
+                ? local.day.queue
+                : flattenLegacyQueues(local.day),
               lastOnCourtAt: local.day?.lastOnCourtAt ?? {},
+              playedWith: local.day?.playedWith ?? {},
+              onBreakPlayerIds: local.day?.onBreakPlayerIds ?? [],
             },
           });
         },
@@ -189,7 +200,43 @@ export const useTennisStore = create<State>()(
                 day: {
                   ...cleared,
                   presentPlayerIds: cleared.presentPlayerIds.filter((id) => id !== playerId),
+                  onBreakPlayerIds: cleared.onBreakPlayerIds.filter((id) => id !== playerId),
                   dutyManagerId: cleared.dutyManagerId === playerId ? undefined : cleared.dutyManagerId,
+                },
+              };
+            },
+          ),
+
+        takeBreak: (playerId) =>
+          withUndo(
+            (s) => `${nameOf(s.players, playerId)} on tea break`,
+            (s) => {
+              if (s.day.onBreakPlayerIds.includes(playerId)) return null;
+              // Stepping away clears them off any court or the queue, but they
+              // stay signed in for the day.
+              const cleared = removeEverywhere(s.day, playerId);
+              const present = cleared.presentPlayerIds.includes(playerId)
+                ? cleared.presentPlayerIds
+                : [...cleared.presentPlayerIds, playerId];
+              return {
+                day: {
+                  ...cleared,
+                  presentPlayerIds: present,
+                  onBreakPlayerIds: [...cleared.onBreakPlayerIds, playerId],
+                },
+              };
+            },
+          ),
+
+        endBreak: (playerId) =>
+          withUndo(
+            (s) => `${nameOf(s.players, playerId)} back from break`,
+            (s) => {
+              if (!s.day.onBreakPlayerIds.includes(playerId)) return null;
+              return {
+                day: {
+                  ...s.day,
+                  onBreakPlayerIds: s.day.onBreakPlayerIds.filter((id) => id !== playerId),
                 },
               };
             },
@@ -232,25 +279,22 @@ export const useTennisStore = create<State>()(
             },
           ),
 
-        queueToCourt: (courtId, playerId) =>
+        queuePlayer: (playerId, atIndex) =>
           withUndo(
-            (s) => `Queued ${nameOf(s.players, playerId)} for ${courtNameOf(s.courts, courtId)}`,
+            (s) => `Queued ${nameOf(s.players, playerId)}`,
             (s) => {
-              const target = s.day.queues.find((q) => q.courtId === courtId);
-              if (!target) return null;
-              if (target.playerIds.includes(playerId)) return null;
-              if (target.playerIds.length >= 4) return null;
+              // Drop into the queue at a rough position (bucket boundary), or
+              // append. Removing-then-inserting keeps a player unique in line.
+              const without = removeEverywhere(s.day, playerId);
+              const present = without.presentPlayerIds.includes(playerId)
+                ? without.presentPlayerIds
+                : [...without.presentPlayerIds, playerId];
 
-              const cleared = removeEverywhere(s.day, playerId);
-              const present = cleared.presentPlayerIds.includes(playerId)
-                ? cleared.presentPlayerIds
-                : [...cleared.presentPlayerIds, playerId];
+              const queue = [...without.queue];
+              const index = atIndex === undefined ? queue.length : Math.min(atIndex, queue.length);
+              queue.splice(index, 0, playerId);
 
-              const queues = cleared.queues.map((q) =>
-                q.courtId === courtId ? { ...q, playerIds: [...q.playerIds, playerId] } : q,
-              );
-
-              return { day: { ...cleared, presentPlayerIds: present, queues } };
+              return { day: { ...without, presentPlayerIds: present, queue } };
             },
           ),
 
@@ -274,36 +318,26 @@ export const useTennisStore = create<State>()(
             },
           ),
 
-        removeFromQueue: (courtId, playerId) =>
+        removeFromQueue: (playerId) =>
           withUndo(
-            (s) =>
-              `Removed ${nameOf(s.players, playerId)} from ${courtNameOf(s.courts, courtId)} queue`,
+            (s) => `Removed ${nameOf(s.players, playerId)} from the queue`,
             (s) => {
-              const target = s.day.queues.find((q) => q.courtId === courtId);
-              if (!target?.playerIds.includes(playerId)) return null;
-              return {
-                day: {
-                  ...s.day,
-                  queues: s.day.queues.map((q) =>
-                    q.courtId === courtId
-                      ? { ...q, playerIds: q.playerIds.filter((id) => id !== playerId) }
-                      : q,
-                  ),
-                },
-              };
+              if (!s.day.queue.includes(playerId)) return null;
+              return { day: { ...s.day, queue: s.day.queue.filter((id) => id !== playerId) } };
             },
           ),
 
-        promoteQueue: (courtId) =>
+        pullNextOntoCourt: (courtId) =>
           withUndo(
-            (s) => `Promoted queue to ${courtNameOf(s.courts, courtId)}`,
+            (s) => `Sent next up to ${courtNameOf(s.courts, courtId)}`,
             (s) => {
               const alloc = s.day.allocations.find((a) => a.courtId === courtId);
-              const queue = s.day.queues.find((q) => q.courtId === courtId);
-              if (!alloc || !queue || queue.playerIds.length === 0) return null;
-              if (alloc.playerIds.length + queue.playerIds.length > 4) return null;
+              if (!alloc) return null;
+              const free = 4 - alloc.playerIds.length;
+              if (free <= 0 || s.day.queue.length === 0) return null;
 
-              const playerIds = [...alloc.playerIds, ...queue.playerIds];
+              const take = s.day.queue.slice(0, free);
+              const playerIds = [...alloc.playerIds, ...take];
               const startedAt = playerIds.length === 4 ? Date.now() : alloc.startedAt;
 
               return {
@@ -312,9 +346,7 @@ export const useTennisStore = create<State>()(
                   allocations: s.day.allocations.map((a) =>
                     a.courtId === courtId ? { ...a, playerIds, startedAt } : a,
                   ),
-                  queues: s.day.queues.map((q) =>
-                    q.courtId === courtId ? { ...q, playerIds: [] } : q,
-                  ),
+                  queue: s.day.queue.slice(take.length),
                 },
               };
             },
@@ -325,10 +357,11 @@ export const useTennisStore = create<State>()(
             order === 'ordered' ? 'Auto-filled courts (in order)' : 'Auto-filled courts (random)',
             (s) => {
               const onCourt = new Set(s.day.allocations.flatMap((a) => a.playerIds));
-              const inQueue = new Set(s.day.queues.flatMap((q) => q.playerIds));
+              const inQueue = new Set(s.day.queue);
+              const onBreak = new Set(s.day.onBreakPlayerIds);
               const lookup = new Map(s.players.map((p) => [p.id, p]));
               const pool = s.day.presentPlayerIds
-                .filter((id) => !onCourt.has(id) && !inQueue.has(id))
+                .filter((id) => !onCourt.has(id) && !inQueue.has(id) && !onBreak.has(id))
                 .map((id) => lookup.get(id))
                 .filter((p): p is Player => Boolean(p));
               if (pool.length === 0) return null;
@@ -339,20 +372,30 @@ export const useTennisStore = create<State>()(
                 shuffleInPlace(pool);
               }
 
-              const ids = pool.map((p) => p.id);
+              // "Ordered" fills strictly by wait time. "Random" still draws from
+              // a shuffled pool but, per court, greedily picks players who have
+              // shared the fewest past matchups (best-effort anti-repeat).
+              let rest = pool.map((p) => p.id);
               const allocations = s.day.allocations.map((a) => {
-                const take = ids.splice(0, 4 - a.playerIds.length);
-                if (take.length === 0) return a;
+                const free = 4 - a.playerIds.length;
+                if (free <= 0 || rest.length === 0) return a;
+                let take: string[];
+                if (order === 'random') {
+                  const result = pickGroup(rest, a.playerIds, free, s.day.playedWith);
+                  take = result.picked;
+                  rest = result.rest;
+                } else {
+                  take = rest.slice(0, free);
+                  rest = rest.slice(free);
+                }
                 const playerIds = [...a.playerIds, ...take];
                 const startedAt = playerIds.length === 4 ? Date.now() : a.startedAt;
                 return { ...a, playerIds, startedAt };
               });
-              const queues = s.day.queues.map((q) => {
-                const take = ids.splice(0, 4 - q.playerIds.length);
-                return take.length > 0 ? { ...q, playerIds: [...q.playerIds, ...take] } : q;
-              });
+              // Anyone left over joins the back of the single waiting line.
+              const queue = [...s.day.queue, ...rest];
 
-              return { day: { ...s.day, allocations, queues } };
+              return { day: { ...s.day, allocations, queue } };
             },
           ),
 
@@ -362,8 +405,8 @@ export const useTennisStore = create<State>()(
             (s) => {
               const finishedAt = Date.now();
               const finishing = s.day.allocations.find((a) => a.courtId === courtId);
-              const queue = s.day.queues.find((q) => q.courtId === courtId);
-              const promote = queue && queue.playerIds.length === 4 ? queue.playerIds : null;
+              // Flow the next full bucket onto the freed court automatically.
+              const promote = s.day.queue.length >= 4 ? s.day.queue.slice(0, 4) : null;
               if (!finishing || (finishing.playerIds.length === 0 && !promote)) return null;
 
               const allocations = s.day.allocations.map((a) => {
@@ -372,16 +415,16 @@ export const useTennisStore = create<State>()(
                 return { ...a, playerIds: [], startedAt: undefined };
               });
 
-              const queues = s.day.queues.map((q) =>
-                q.courtId === courtId && promote ? { ...q, playerIds: [] } : q,
-              );
+              const queue = promote ? s.day.queue.slice(4) : s.day.queue;
 
               const lastOnCourtAt = { ...s.day.lastOnCourtAt };
               for (const id of finishing.playerIds) {
                 lastOnCourtAt[id] = finishedAt;
               }
+              // Remember this foursome so future random fills can avoid repeats.
+              const playedWith = recordFoursome(s.day.playedWith, finishing.playerIds);
 
-              return { day: { ...s.day, allocations, queues, lastOnCourtAt } };
+              return { day: { ...s.day, allocations, queue, lastOnCourtAt, playedWith } };
             },
           ),
 
@@ -406,9 +449,11 @@ export const useTennisStore = create<State>()(
           withUndo('Finished club day', (s) => ({
             day: {
               ...initialDay,
+              onBreakPlayerIds: [],
               allocations: s.courts.map((c) => ({ courtId: c.id, playerIds: [] })),
-              queues: s.courts.map((c) => ({ courtId: c.id, playerIds: [] })),
+              queue: [],
               lastOnCourtAt: {},
+              playedWith: {},
             },
           })),
       };
@@ -432,8 +477,4 @@ export const useTennisStore = create<State>()(
 
 export function getCourtAllocation(state: State, courtId: string): CourtAllocation | undefined {
   return state.day.allocations.find((a) => a.courtId === courtId);
-}
-
-export function getCourtQueue(state: State, courtId: string): QueueEntry | undefined {
-  return state.day.queues.find((q) => q.courtId === courtId);
 }

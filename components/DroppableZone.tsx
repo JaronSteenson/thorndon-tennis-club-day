@@ -6,8 +6,9 @@ import { cn } from '@/lib/utils';
 
 type DropData =
   | { kind: 'present' }
+  | { kind: 'break' }
   | { kind: 'court'; courtId: string }
-  | { kind: 'queue'; courtId: string };
+  | { kind: 'queue'; index: number };
 
 type Props = {
   id: string;

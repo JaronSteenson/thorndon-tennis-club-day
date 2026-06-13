@@ -11,6 +11,8 @@ import {
 } from '@dnd-kit/core';
 import { Header } from '@/components/Header';
 import { CourtCard } from '@/components/CourtCard';
+import { QueuePanel } from '@/components/QueuePanel';
+import { BreakPanel } from '@/components/BreakPanel';
 import { PresentPanel } from '@/components/PresentPanel';
 import { SignInScreen } from '@/components/SignInScreen';
 import { UndoToast } from '@/components/UndoToast';
@@ -23,7 +25,9 @@ export default function Page() {
   const mode = useTennisStore((s) => s.mode);
   const markPresent = useTennisStore((s) => s.markPresent);
   const assignToCourt = useTennisStore((s) => s.assignToCourt);
-  const queueToCourt = useTennisStore((s) => s.queueToCourt);
+  const queuePlayer = useTennisStore((s) => s.queuePlayer);
+  const takeBreak = useTennisStore((s) => s.takeBreak);
+  const endBreak = useTennisStore((s) => s.endBreak);
 
   React.useEffect(() => {
     if (!hydrated) hydrateSeed();
@@ -37,18 +41,23 @@ export default function Page() {
   const onDragEnd = (event: DragEndEvent) => {
     const overData = event.over?.data?.current as
       | { kind: 'present' }
+      | { kind: 'break' }
       | { kind: 'court'; courtId: string }
-      | { kind: 'queue'; courtId: string }
+      | { kind: 'queue'; index: number }
       | undefined;
     const dragData = event.active?.data?.current as { playerId: string } | undefined;
     if (!overData || !dragData) return;
     const { playerId } = dragData;
     if (overData.kind === 'present') {
+      // Returns a player from the tea-break bucket; a no-op otherwise.
+      endBreak(playerId);
       markPresent(playerId);
+    } else if (overData.kind === 'break') {
+      takeBreak(playerId);
     } else if (overData.kind === 'court') {
       assignToCourt(overData.courtId, playerId);
     } else if (overData.kind === 'queue') {
-      queueToCourt(overData.courtId, playerId);
+      queuePlayer(playerId, overData.index);
     }
   };
 
@@ -68,13 +77,19 @@ export default function Page() {
           <SignInScreen />
         ) : (
           <>
-            {/* Breakpoints assume the fixed set of 3 courts. */}
-            <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {courts.map((c) => (
-                <CourtCard key={c.id} court={c} />
-              ))}
-            </section>
-            <PresentPanel />
+            <div className="flex flex-col gap-3 xl:flex-row">
+              {/* Breakpoints assume the fixed set of 3 courts. */}
+              <section className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {courts.map((c) => (
+                  <CourtCard key={c.id} court={c} />
+                ))}
+              </section>
+              <QueuePanel className="xl:w-72 xl:shrink-0" />
+            </div>
+            <div className="flex flex-col gap-3 lg:flex-row">
+              <BreakPanel className="lg:w-64 lg:shrink-0" />
+              <PresentPanel className="flex-1" />
+            </div>
           </>
         )}
       </main>
