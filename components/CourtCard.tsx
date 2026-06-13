@@ -16,18 +16,18 @@ export function CourtCard({ court }: Props) {
   const allocation = useTennisStore((s) =>
     s.day.allocations.find((a) => a.courtId === court.id),
   );
-  const queue = useTennisStore((s) => s.day.queues.find((q) => q.courtId === court.id));
+  const queueLength = useTennisStore((s) => s.day.queue.length);
   const players = useTennisStore((s) => s.players);
   const finishGame = useTennisStore((s) => s.finishGame);
-  const promoteQueue = useTennisStore((s) => s.promoteQueue);
+  const pullNextOntoCourt = useTennisStore((s) => s.pullNextOntoCourt);
   const now = useNowTick(1000);
 
   const lookup = React.useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
 
   const assignedIds = allocation?.playerIds ?? [];
-  const queueIds = queue?.playerIds ?? [];
   const started = allocation?.startedAt;
   const inPlay = assignedIds.length === 4 && started;
+  const hasFreeSlot = assignedIds.length < 4;
 
   const tabColor = court.color === 'blue' ? 'bg-court-blue' : 'bg-court-green';
 
@@ -71,29 +71,18 @@ export function CourtCard({ court }: Props) {
         </div>
       </DroppableZone>
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
-            Next
-          </span>
-          {queueIds.length > 0 && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={assignedIds.length + queueIds.length > 4}
-              title={
-                assignedIds.length + queueIds.length > 4
-                  ? 'Not enough free slots on the court'
-                  : undefined
-              }
-              onClick={() => promoteQueue(court.id)}
-              data-testid={`promote-${court.id}`}
-            >
-              <ArrowUp className="h-4 w-4" />
-              Play now
-            </Button>
-          )}
-        </div>
+      <div className="flex items-center justify-end gap-2">
+        {hasFreeSlot && queueLength > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => pullNextOntoCourt(court.id)}
+            data-testid={`play-next-${court.id}`}
+          >
+            <ArrowUp className="h-4 w-4" />
+            Play next
+          </Button>
+        )}
         {inPlay && (
           <Button
             size="sm"
@@ -105,38 +94,6 @@ export function CourtCard({ court }: Props) {
           </Button>
         )}
       </div>
-
-      <DroppableZone
-        id={`queue-${court.id}`}
-        data={{ kind: 'queue', courtId: court.id }}
-        className="min-h-[52px] p-1.5"
-      >
-        <div className="grid grid-cols-2 gap-1.5">
-          {Array.from({ length: 4 }).map((_, idx) => {
-            const pid = queueIds[idx];
-            const player = pid ? lookup.get(pid) : undefined;
-            return (
-              <div
-                key={idx}
-                className={cn(
-                  'flex min-h-[32px] items-center justify-center rounded-md',
-                  !player && 'border border-dashed border-neutral-300 text-neutral-400 text-xs',
-                )}
-              >
-                {player ? (
-                  <PlayerChip
-                    player={player}
-                    location={{ kind: 'queue', courtId: court.id }}
-                    size="sm"
-                  />
-                ) : (
-                  <span>queue {idx + 1}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </DroppableZone>
     </div>
   );
 }

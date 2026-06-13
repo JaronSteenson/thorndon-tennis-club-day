@@ -18,7 +18,7 @@ import type { Player } from '@/lib/types';
 export type ChipLocation =
   | { kind: 'present' }
   | { kind: 'court'; courtId: string }
-  | { kind: 'queue'; courtId: string };
+  | { kind: 'queue' };
 
 type Props = {
   player: Player;
@@ -65,7 +65,7 @@ function ChipMenu({ player, location }: { player: Player; location: ChipLocation
   const courts = useTennisStore((s) => s.courts);
   const unmarkPresent = useTennisStore((s) => s.unmarkPresent);
   const assignToCourt = useTennisStore((s) => s.assignToCourt);
-  const queueToCourt = useTennisStore((s) => s.queueToCourt);
+  const queuePlayer = useTennisStore((s) => s.queuePlayer);
   const removeFromCourt = useTennisStore((s) => s.removeFromCourt);
   const removeFromQueue = useTennisStore((s) => s.removeFromQueue);
 
@@ -101,14 +101,9 @@ function ChipMenu({ player, location }: { player: Player; location: ChipLocation
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            {courts.map((c) => (
-              <DropdownMenuItem
-                key={`queue-${c.id}`}
-                onSelect={() => queueToCourt(c.id, player.id)}
-              >
-                Queue to {c.name}
-              </DropdownMenuItem>
-            ))}
+            <DropdownMenuItem onSelect={() => queuePlayer(player.id)}>
+              Add to queue
+            </DropdownMenuItem>
           </>
         )}
         {location.kind === 'court' && (
@@ -119,9 +114,7 @@ function ChipMenu({ player, location }: { player: Player; location: ChipLocation
           </DropdownMenuItem>
         )}
         {location.kind === 'queue' && (
-          <DropdownMenuItem
-            onSelect={() => removeFromQueue(location.courtId, player.id)}
-          >
+          <DropdownMenuItem onSelect={() => removeFromQueue(player.id)}>
             Remove from queue
           </DropdownMenuItem>
         )}
@@ -145,6 +138,6 @@ function locationToString(loc: ChipLocation): string {
     case 'court':
       return `court:${loc.courtId}`;
     case 'queue':
-      return `queue:${loc.courtId}`;
+      return 'queue';
   }
 }

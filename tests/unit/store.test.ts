@@ -60,34 +60,46 @@ describe('store', () => {
     expect(c4.playerIds).toContain(id);
   });
 
-  it('finishGame clears court and promotes a full queue', () => {
+  it('finishGame clears court and flows the next full bucket from the queue', () => {
     const players = useTennisStore.getState().players;
     const courtIds = players.slice(0, 4).map((p) => p.id);
     const queueIds = players.slice(4, 8).map((p) => p.id);
 
     for (const id of courtIds) useTennisStore.getState().assignToCourt('court-3', id);
-    for (const id of queueIds) useTennisStore.getState().queueToCourt('court-3', id);
+    for (const id of queueIds) useTennisStore.getState().queuePlayer(id);
 
     useTennisStore.getState().finishGame('court-3');
 
     const alloc = useTennisStore.getState().day.allocations.find((a) => a.courtId === 'court-3')!;
-    const queue = useTennisStore.getState().day.queues.find((q) => q.courtId === 'court-3')!;
     expect(alloc.playerIds).toEqual(queueIds);
     expect(alloc.startedAt).toBeGreaterThan(0);
-    expect(queue.playerIds).toEqual([]);
+    expect(useTennisStore.getState().day.queue).toEqual([]);
   });
 
-  it('finishGame leaves court empty if queue is not full', () => {
+  it('finishGame leaves court empty if fewer than four are waiting', () => {
     const players = useTennisStore.getState().players;
     const courtIds = players.slice(0, 4).map((p) => p.id);
     for (const id of courtIds) useTennisStore.getState().assignToCourt('court-3', id);
-    useTennisStore.getState().queueToCourt('court-3', players[4].id);
+    useTennisStore.getState().queuePlayer(players[4].id);
     useTennisStore.getState().finishGame('court-3');
     const alloc = useTennisStore.getState().day.allocations.find((a) => a.courtId === 'court-3')!;
-    const queue = useTennisStore.getState().day.queues.find((q) => q.courtId === 'court-3')!;
     expect(alloc.playerIds).toEqual([]);
     expect(alloc.startedAt).toBeUndefined();
-    expect(queue.playerIds).toEqual([players[4].id]);
+    expect(useTennisStore.getState().day.queue).toEqual([players[4].id]);
+  });
+
+  it('finishGame flows the front bucket regardless of which court frees up', () => {
+    const players = useTennisStore.getState().players;
+    const onC4 = players.slice(0, 4).map((p) => p.id);
+    const waiting = players.slice(4, 8).map((p) => p.id);
+    for (const id of onC4) useTennisStore.getState().assignToCourt('court-4', id);
+    for (const id of waiting) useTennisStore.getState().queuePlayer(id);
+
+    useTennisStore.getState().finishGame('court-4');
+
+    const c4 = useTennisStore.getState().day.allocations.find((a) => a.courtId === 'court-4')!;
+    expect(c4.playerIds).toEqual(waiting);
+    expect(useTennisStore.getState().day.queue).toEqual([]);
   });
 
   it('quickAddPlayer adds to roster and marks present', () => {
@@ -143,71 +155,70 @@ describe('store', () => {
     expect(day.presentPlayerIds).toEqual([]);
     expect(day.dutyManagerId).toBeUndefined();
     expect(day.allocations.every((a) => a.playerIds.length === 0)).toBe(true);
-    expect(day.queues.every((q) => q.playerIds.length === 0)).toBe(true);
+    expect(day.queue).toEqual([]);
     expect(day.lastOnCourtAt).toEqual({});
     expect(rosterAfter.length).toBe(players.length);
   });
 });
 
-describe('promoteQueue', () => {
+describe('pullNextOntoCourt', () => {
   beforeEach(() => {
     reset();
   });
 
-  it('moves a partial group onto an empty court without starting the game', () => {
+  it('moves a partial group from the queue onto an empty court without starting', () => {
     const players = useTennisStore.getState().players;
     const ids = players.slice(0, 2).map((p) => p.id);
-    for (const id of ids) useTennisStore.getState().queueToCourt('court-3', id);
+    for (const id of ids) useTennisStore.getState().queuePlayer(id);
 
-    useTennisStore.getState().promoteQueue('court-3');
+    useTennisStore.getState().pullNextOntoCourt('court-3');
 
     const alloc = useTennisStore.getState().day.allocations.find((a) => a.courtId === 'court-3')!;
-    const queue = useTennisStore.getState().day.queues.find((q) => q.courtId === 'court-3')!;
     expect(alloc.playerIds).toEqual(ids);
     expect(alloc.startedAt).toBeUndefined();
-    expect(queue.playerIds).toEqual([]);
+    expect(useTennisStore.getState().day.queue).toEqual([]);
   });
 
-  it('starts the game when promotion fills the court to 4', () => {
+  it('starts the game when the pull fills the court to 4', () => {
     const players = useTennisStore.getState().players;
     const ids = players.slice(0, 4).map((p) => p.id);
-    for (const id of ids) useTennisStore.getState().queueToCourt('court-3', id);
+    for (const id of ids) useTennisStore.getState().queuePlayer(id);
 
-    useTennisStore.getState().promoteQueue('court-3');
+    useTennisStore.getState().pullNextOntoCourt('court-3');
 
     const alloc = useTennisStore.getState().day.allocations.find((a) => a.courtId === 'court-3')!;
     expect(alloc.playerIds).toEqual(ids);
     expect(alloc.startedAt).toBeGreaterThan(0);
   });
 
-  it('merges queued players into free slots on a partially filled court', () => {
+  it('only pulls enough to fill the free slots, leaving the rest queued', () => {
     const players = useTennisStore.getState().players;
     const onCourt = players.slice(0, 2).map((p) => p.id);
-    const queued = players.slice(2, 4).map((p) => p.id);
+    const queued = players.slice(2, 8).map((p) => p.id);
     for (const id of onCourt) useTennisStore.getState().assignToCourt('court-3', id);
-    for (const id of queued) useTennisStore.getState().queueToCourt('court-3', id);
+    for (const id of queued) useTennisStore.getState().queuePlayer(id);
 
-    useTennisStore.getState().promoteQueue('court-3');
+    useTennisStore.getState().pullNextOntoCourt('court-3');
 
     const alloc = useTennisStore.getState().day.allocations.find((a) => a.courtId === 'court-3')!;
-    expect(alloc.playerIds).toEqual([...onCourt, ...queued]);
+    expect(alloc.playerIds).toEqual([...onCourt, ...queued.slice(0, 2)]);
     expect(alloc.startedAt).toBeGreaterThan(0);
+    expect(useTennisStore.getState().day.queue).toEqual(queued.slice(2));
   });
 
-  it('is a no-op (and leaves lastUndo alone) when the group does not fit', () => {
+  it('is a no-op (and leaves lastUndo alone) when the court is full', () => {
     const players = useTennisStore.getState().players;
-    const onCourt = players.slice(0, 3).map((p) => p.id);
-    const queued = players.slice(3, 5).map((p) => p.id);
+    const onCourt = players.slice(0, 4).map((p) => p.id);
+    const queued = players.slice(4, 6).map((p) => p.id);
     for (const id of onCourt) useTennisStore.getState().assignToCourt('court-3', id);
-    for (const id of queued) useTennisStore.getState().queueToCourt('court-3', id);
+    for (const id of queued) useTennisStore.getState().queuePlayer(id);
     const undoBefore = useTennisStore.getState().lastUndo;
 
-    useTennisStore.getState().promoteQueue('court-3');
+    useTennisStore.getState().pullNextOntoCourt('court-3');
 
     const alloc = useTennisStore.getState().day.allocations.find((a) => a.courtId === 'court-3')!;
-    const queue = useTennisStore.getState().day.queues.find((q) => q.courtId === 'court-3')!;
     expect(alloc.playerIds).toEqual(onCourt);
-    expect(queue.playerIds).toEqual(queued);
+    expect(useTennisStore.getState().day.queue).toEqual(queued);
     expect(useTennisStore.getState().lastUndo).toBe(undoBefore);
   });
 });
@@ -228,14 +239,14 @@ describe('autoAssign', () => {
 
     useTennisStore.getState().autoAssign('ordered');
 
-    const { allocations, queues } = useTennisStore.getState().day;
+    const { allocations, queue } = useTennisStore.getState().day;
     expect(allocations.every((a) => a.playerIds.length === 4)).toBe(true);
     expect(allocations.every((a) => (a.startedAt ?? 0) > 0)).toBe(true);
     // The 12 never-played players take the 12 court slots; the 4 who just
-    // played overflow into the first queue.
+    // played overflow into the single waiting line.
     const onCourts = new Set(allocations.flatMap((a) => a.playerIds));
     for (const id of fresh) expect(onCourts.has(id)).toBe(true);
-    expect(new Set(queues.flatMap((q) => q.playerIds))).toEqual(new Set(played));
+    expect(new Set(queue)).toEqual(new Set(played));
   });
 
   it('ordered tops up partially filled courts without disturbing occupants', () => {
@@ -259,9 +270,9 @@ describe('autoAssign', () => {
 
     useTennisStore.getState().autoAssign('random');
 
-    const { allocations, queues } = useTennisStore.getState().day;
-    const placed = [...allocations.flatMap((a) => a.playerIds), ...queues.flatMap((q) => q.playerIds)];
-    // 12 court slots + 8 queue slots... only 3 courts x 4 + 3 queues x 4 = 24 slots, pool of 20
+    const { allocations, queue } = useTennisStore.getState().day;
+    const placed = [...allocations.flatMap((a) => a.playerIds), ...queue];
+    // 12 court slots fill, the remaining 8 of the pool of 20 join the queue.
     expect(allocations.every((a) => a.playerIds.length === 4)).toBe(true);
     expect(placed.length).toBe(20);
     expect(new Set(placed).size).toBe(20);

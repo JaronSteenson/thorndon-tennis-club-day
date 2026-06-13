@@ -18,15 +18,14 @@ export type CourtAllocation = {
   startedAt?: number;
 };
 
-export type QueueEntry = {
-  courtId: string;
-  playerIds: string[];
-};
-
 export type DayState = {
   presentPlayerIds: string[];
   dutyManagerId?: string;
   allocations: CourtAllocation[];
-  queues: QueueEntry[];
+  /**
+   * Single ordered waiting line, not court-specific. The front of the queue
+   * flows onto whichever court next becomes free. Rendered as buckets of four.
+   */
+  queue: string[];
   lastOnCourtAt: Record<string, number>;
 };

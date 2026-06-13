@@ -12,20 +12,20 @@ export function PresentPanel() {
   const players = useTennisStore((s) => s.players);
   const present = useTennisStore((s) => s.day.presentPlayerIds);
   const allocations = useTennisStore((s) => s.day.allocations);
-  const queues = useTennisStore((s) => s.day.queues);
+  const queue = useTennisStore((s) => s.day.queue);
   const lastOnCourtAt = useTennisStore((s) => s.day.lastOnCourtAt);
   const autoAssign = useTennisStore((s) => s.autoAssign);
 
   const lookup = React.useMemo(() => new Map(players.map((p) => [p.id, p])), [players]);
   const available = React.useMemo(() => {
     const onCourt = new Set(allocations.flatMap((a) => a.playerIds));
-    const inQueue = new Set(queues.flatMap((q) => q.playerIds));
+    const inQueue = new Set(queue);
     return present
       .filter((id) => !onCourt.has(id) && !inQueue.has(id))
       .map((id) => lookup.get(id))
       .filter((p): p is NonNullable<typeof p> => Boolean(p))
       .sort((a, b) => compareByWait(a, b, lastOnCourtAt));
-  }, [present, allocations, queues, lookup, lastOnCourtAt]);
+  }, [present, allocations, queue, lookup, lastOnCourtAt]);
 
   return (
     <section className="flex flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
