@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useTennisStore, STORAGE_KEY } from '@/lib/store';
+import { pairCount } from '@/lib/matchups';
 
 function reset() {
   localStorage.removeItem(STORAGE_KEY);
@@ -125,6 +126,17 @@ describe('store', () => {
     }
   });
 
+  it('finishGame records the foursome as having played together', () => {
+    const players = useTennisStore.getState().players;
+    const ids = players.slice(0, 4).map((p) => p.id);
+    for (const id of ids) useTennisStore.getState().assignToCourt('court-3', id);
+    useTennisStore.getState().finishGame('court-3');
+
+    const pw = useTennisStore.getState().day.playedWith;
+    expect(pairCount(pw, ids[0], ids[1])).toBe(1);
+    expect(pairCount(pw, ids[3], ids[0])).toBe(1);
+  });
+
   it('sort by lastOnCourtAt puts most-recently-played at the end', () => {
     const players = useTennisStore.getState().players;
     const [a, b, c, d, e, f, g, h] = players.slice(0, 8).map((p) => p.id);
@@ -157,6 +169,7 @@ describe('store', () => {
     expect(day.allocations.every((a) => a.playerIds.length === 0)).toBe(true);
     expect(day.queue).toEqual([]);
     expect(day.lastOnCourtAt).toEqual({});
+    expect(day.playedWith).toEqual({});
     expect(rosterAfter.length).toBe(players.length);
   });
 });
@@ -283,6 +296,35 @@ describe('autoAssign', () => {
     const undoBefore = useTennisStore.getState().lastUndo;
     useTennisStore.getState().autoAssign('ordered');
     expect(useTennisStore.getState().lastUndo).toBe(undoBefore);
+  });
+
+  it('random does not reunite a foursome that just played together', () => {
+    const players = useTennisStore.getState().players;
+    const foursome = players.slice(0, 4).map((p) => p.id);
+    const fresh = players.slice(4, 7).map((p) => p.id);
+
+    // Play and finish a game so the foursome is recorded as having played.
+    for (const id of foursome) useTennisStore.getState().assignToCourt('court-3', id);
+    useTennisStore.getState().finishGame('court-3');
+    // The four are still present; add three never-paired players to the pool.
+    for (const id of fresh) useTennisStore.getState().markPresent(id);
+
+    // Repeat enough times that we'd almost certainly hit a bad shuffle if the
+    // anti-repeat grouping weren't working.
+    for (let trial = 0; trial < 25; trial++) {
+      // Clear courts back to the pre-fill state without wiping playedWith.
+      for (const courtId of ['court-3', 'court-4', 'court-5']) {
+        for (const id of [...foursome, ...fresh]) {
+          useTennisStore.getState().removeFromCourt(courtId, id);
+        }
+      }
+      useTennisStore.getState().autoAssign('random');
+      const { allocations } = useTennisStore.getState().day;
+      for (const a of allocations) {
+        const onThisCourt = foursome.filter((id) => a.playerIds.includes(id));
+        expect(onThisCourt.length).toBeLessThan(4);
+      }
+    }
   });
 });
 

@@ -7,6 +7,7 @@ import courtsSeed from '@/data/courts.json';
 import playersSeed from '@/data/players.json';
 import { mergeCourts, mergePlayers } from './seedMerge';
 import { compareByWait } from './playerSort';
+import { pickGroup, recordFoursome } from './matchups';
 
 export const STORAGE_KEY = 'tennis-day:v1';
 
@@ -62,6 +63,7 @@ const initialDay: DayState = {
   ],
   queue: [],
   lastOnCourtAt: {},
+  playedWith: {},
 };
 
 function ensureCourtSlots(courts: Court[], allocs: CourtAllocation[]) {
@@ -158,6 +160,7 @@ export const useTennisStore = create<State>()(
                 ? local.day.queue
                 : flattenLegacyQueues(local.day),
               lastOnCourtAt: local.day?.lastOnCourtAt ?? {},
+              playedWith: local.day?.playedWith ?? {},
             },
           });
         },
@@ -327,16 +330,28 @@ export const useTennisStore = create<State>()(
                 shuffleInPlace(pool);
               }
 
-              const ids = pool.map((p) => p.id);
+              // "Ordered" fills strictly by wait time. "Random" still draws from
+              // a shuffled pool but, per court, greedily picks players who have
+              // shared the fewest past matchups (best-effort anti-repeat).
+              let rest = pool.map((p) => p.id);
               const allocations = s.day.allocations.map((a) => {
-                const take = ids.splice(0, 4 - a.playerIds.length);
-                if (take.length === 0) return a;
+                const free = 4 - a.playerIds.length;
+                if (free <= 0 || rest.length === 0) return a;
+                let take: string[];
+                if (order === 'random') {
+                  const result = pickGroup(rest, a.playerIds, free, s.day.playedWith);
+                  take = result.picked;
+                  rest = result.rest;
+                } else {
+                  take = rest.slice(0, free);
+                  rest = rest.slice(free);
+                }
                 const playerIds = [...a.playerIds, ...take];
                 const startedAt = playerIds.length === 4 ? Date.now() : a.startedAt;
                 return { ...a, playerIds, startedAt };
               });
               // Anyone left over joins the back of the single waiting line.
-              const queue = [...s.day.queue, ...ids];
+              const queue = [...s.day.queue, ...rest];
 
               return { day: { ...s.day, allocations, queue } };
             },
@@ -364,8 +379,10 @@ export const useTennisStore = create<State>()(
               for (const id of finishing.playerIds) {
                 lastOnCourtAt[id] = finishedAt;
               }
+              // Remember this foursome so future random fills can avoid repeats.
+              const playedWith = recordFoursome(s.day.playedWith, finishing.playerIds);
 
-              return { day: { ...s.day, allocations, queue, lastOnCourtAt } };
+              return { day: { ...s.day, allocations, queue, lastOnCourtAt, playedWith } };
             },
           ),
 
@@ -393,6 +410,7 @@ export const useTennisStore = create<State>()(
               allocations: s.courts.map((c) => ({ courtId: c.id, playerIds: [] })),
               queue: [],
               lastOnCourtAt: {},
+              playedWith: {},
             },
           })),
       };

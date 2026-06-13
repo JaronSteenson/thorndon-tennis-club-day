@@ -28,4 +28,9 @@ export type DayState = {
    */
   queue: string[];
   lastOnCourtAt: Record<string, number>;
+  /**
+   * Symmetric count of how many times each pair has played together today,
+   * keyed playedWith[a][b]. Used to steer "Fill random" away from repeats.
+   */
+  playedWith: Record<string, Record<string, number>>;
 };
