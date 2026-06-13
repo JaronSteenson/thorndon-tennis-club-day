@@ -170,7 +170,75 @@ describe('store', () => {
     expect(day.queue).toEqual([]);
     expect(day.lastOnCourtAt).toEqual({});
     expect(day.playedWith).toEqual({});
+    expect(day.onBreakPlayerIds).toEqual([]);
     expect(rosterAfter.length).toBe(players.length);
+  });
+});
+
+describe('tea break', () => {
+  beforeEach(() => {
+    reset();
+  });
+
+  it('takeBreak holds a player out while keeping them signed in', () => {
+    const id = useTennisStore.getState().players[0].id;
+    useTennisStore.getState().markPresent(id);
+    useTennisStore.getState().takeBreak(id);
+
+    const { day } = useTennisStore.getState();
+    expect(day.onBreakPlayerIds).toContain(id);
+    expect(day.presentPlayerIds).toContain(id);
+  });
+
+  it('takeBreak clears the player off any court', () => {
+    const id = useTennisStore.getState().players[0].id;
+    useTennisStore.getState().assignToCourt('court-3', id);
+    useTennisStore.getState().takeBreak(id);
+
+    const alloc = useTennisStore.getState().day.allocations.find((a) => a.courtId === 'court-3')!;
+    expect(alloc.playerIds).not.toContain(id);
+    expect(useTennisStore.getState().day.onBreakPlayerIds).toContain(id);
+  });
+
+  it('endBreak returns the player to the pool', () => {
+    const id = useTennisStore.getState().players[0].id;
+    useTennisStore.getState().markPresent(id);
+    useTennisStore.getState().takeBreak(id);
+    useTennisStore.getState().endBreak(id);
+    expect(useTennisStore.getState().day.onBreakPlayerIds).not.toContain(id);
+  });
+
+  it('assigning a resting player to a court ends their break', () => {
+    const id = useTennisStore.getState().players[0].id;
+    useTennisStore.getState().markPresent(id);
+    useTennisStore.getState().takeBreak(id);
+    useTennisStore.getState().assignToCourt('court-4', id);
+    expect(useTennisStore.getState().day.onBreakPlayerIds).not.toContain(id);
+  });
+
+  it('unmarkPresent also clears a player off their break', () => {
+    const id = useTennisStore.getState().players[0].id;
+    useTennisStore.getState().markPresent(id);
+    useTennisStore.getState().takeBreak(id);
+    useTennisStore.getState().unmarkPresent(id);
+    const { day } = useTennisStore.getState();
+    expect(day.onBreakPlayerIds).not.toContain(id);
+    expect(day.presentPlayerIds).not.toContain(id);
+  });
+
+  it('autoAssign leaves resting players out of the fill', () => {
+    const players = useTennisStore.getState().players;
+    const ids = players.slice(0, 6).map((p) => p.id);
+    for (const id of ids) useTennisStore.getState().markPresent(id);
+    const resting = ids[0];
+    useTennisStore.getState().takeBreak(resting);
+
+    useTennisStore.getState().autoAssign('ordered');
+
+    const { allocations, queue } = useTennisStore.getState().day;
+    const placed = new Set([...allocations.flatMap((a) => a.playerIds), ...queue]);
+    expect(placed.has(resting)).toBe(false);
+    expect(useTennisStore.getState().day.onBreakPlayerIds).toContain(resting);
   });
 });
 

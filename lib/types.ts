@@ -20,6 +20,11 @@ export type CourtAllocation = {
 
 export type DayState = {
   presentPlayerIds: string[];
+  /**
+   * Present players taking a mid-session breather. Still signed in, but held
+   * out of the waiting pool and auto-fill until they come back.
+   */
+  onBreakPlayerIds: string[];
   dutyManagerId?: string;
   allocations: CourtAllocation[];
   /**

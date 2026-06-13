@@ -7,12 +7,14 @@ import { useTennisStore } from '@/lib/store';
 import { compareByWait } from '@/lib/playerSort';
 import { PlayerChip } from './PlayerChip';
 import { DroppableZone } from './DroppableZone';
+import { cn } from '@/lib/utils';
 
-export function PresentPanel() {
+export function PresentPanel({ className }: { className?: string }) {
   const players = useTennisStore((s) => s.players);
   const present = useTennisStore((s) => s.day.presentPlayerIds);
   const allocations = useTennisStore((s) => s.day.allocations);
   const queue = useTennisStore((s) => s.day.queue);
+  const onBreak = useTennisStore((s) => s.day.onBreakPlayerIds);
   const lastOnCourtAt = useTennisStore((s) => s.day.lastOnCourtAt);
   const autoAssign = useTennisStore((s) => s.autoAssign);
 
@@ -20,15 +22,21 @@ export function PresentPanel() {
   const available = React.useMemo(() => {
     const onCourt = new Set(allocations.flatMap((a) => a.playerIds));
     const inQueue = new Set(queue);
+    const resting = new Set(onBreak);
     return present
-      .filter((id) => !onCourt.has(id) && !inQueue.has(id))
+      .filter((id) => !onCourt.has(id) && !inQueue.has(id) && !resting.has(id))
       .map((id) => lookup.get(id))
       .filter((p): p is NonNullable<typeof p> => Boolean(p))
       .sort((a, b) => compareByWait(a, b, lastOnCourtAt));
-  }, [present, allocations, queue, lookup, lastOnCourtAt]);
+  }, [present, allocations, queue, onBreak, lookup, lastOnCourtAt]);
 
   return (
-    <section className="flex flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
+    <section
+      className={cn(
+        'flex flex-col gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm',
+        className,
+      )}
+    >
       <header className="flex flex-wrap items-baseline justify-between gap-3">
         <div className="flex items-baseline gap-4">
           <h2 className="text-lg font-bold uppercase tracking-wider">Here today</h2>

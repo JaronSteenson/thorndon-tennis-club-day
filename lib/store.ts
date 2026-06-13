@@ -32,6 +32,8 @@ type Actions = {
   dismissUndo: () => void;
   markPresent: (playerId: string) => void;
   unmarkPresent: (playerId: string) => void;
+  takeBreak: (playerId: string) => void;
+  endBreak: (playerId: string) => void;
   setDutyManager: (playerId: string | undefined) => void;
   assignToCourt: (courtId: string, playerId: string) => void;
   queuePlayer: (playerId: string, atIndex?: number) => void;
@@ -55,6 +57,7 @@ type State = {
 
 const initialDay: DayState = {
   presentPlayerIds: [],
+  onBreakPlayerIds: [],
   dutyManagerId: undefined,
   allocations: [
     { courtId: 'court-3', playerIds: [] },
@@ -81,6 +84,7 @@ function removeEverywhere(day: DayState, playerId: string): DayState {
       startedAt: a.playerIds.includes(playerId) && a.playerIds.length === 4 ? undefined : a.startedAt,
     })),
     queue: day.queue.filter((id) => id !== playerId),
+    onBreakPlayerIds: day.onBreakPlayerIds.filter((id) => id !== playerId),
   };
 }
 
@@ -161,6 +165,7 @@ export const useTennisStore = create<State>()(
                 : flattenLegacyQueues(local.day),
               lastOnCourtAt: local.day?.lastOnCourtAt ?? {},
               playedWith: local.day?.playedWith ?? {},
+              onBreakPlayerIds: local.day?.onBreakPlayerIds ?? [],
             },
           });
         },
@@ -195,7 +200,43 @@ export const useTennisStore = create<State>()(
                 day: {
                   ...cleared,
                   presentPlayerIds: cleared.presentPlayerIds.filter((id) => id !== playerId),
+                  onBreakPlayerIds: cleared.onBreakPlayerIds.filter((id) => id !== playerId),
                   dutyManagerId: cleared.dutyManagerId === playerId ? undefined : cleared.dutyManagerId,
+                },
+              };
+            },
+          ),
+
+        takeBreak: (playerId) =>
+          withUndo(
+            (s) => `${nameOf(s.players, playerId)} on tea break`,
+            (s) => {
+              if (s.day.onBreakPlayerIds.includes(playerId)) return null;
+              // Stepping away clears them off any court or the queue, but they
+              // stay signed in for the day.
+              const cleared = removeEverywhere(s.day, playerId);
+              const present = cleared.presentPlayerIds.includes(playerId)
+                ? cleared.presentPlayerIds
+                : [...cleared.presentPlayerIds, playerId];
+              return {
+                day: {
+                  ...cleared,
+                  presentPlayerIds: present,
+                  onBreakPlayerIds: [...cleared.onBreakPlayerIds, playerId],
+                },
+              };
+            },
+          ),
+
+        endBreak: (playerId) =>
+          withUndo(
+            (s) => `${nameOf(s.players, playerId)} back from break`,
+            (s) => {
+              if (!s.day.onBreakPlayerIds.includes(playerId)) return null;
+              return {
+                day: {
+                  ...s.day,
+                  onBreakPlayerIds: s.day.onBreakPlayerIds.filter((id) => id !== playerId),
                 },
               };
             },
@@ -317,9 +358,10 @@ export const useTennisStore = create<State>()(
             (s) => {
               const onCourt = new Set(s.day.allocations.flatMap((a) => a.playerIds));
               const inQueue = new Set(s.day.queue);
+              const onBreak = new Set(s.day.onBreakPlayerIds);
               const lookup = new Map(s.players.map((p) => [p.id, p]));
               const pool = s.day.presentPlayerIds
-                .filter((id) => !onCourt.has(id) && !inQueue.has(id))
+                .filter((id) => !onCourt.has(id) && !inQueue.has(id) && !onBreak.has(id))
                 .map((id) => lookup.get(id))
                 .filter((p): p is Player => Boolean(p));
               if (pool.length === 0) return null;
@@ -407,6 +449,7 @@ export const useTennisStore = create<State>()(
           withUndo('Finished club day', (s) => ({
             day: {
               ...initialDay,
+              onBreakPlayerIds: [],
               allocations: s.courts.map((c) => ({ courtId: c.id, playerIds: [] })),
               queue: [],
               lastOnCourtAt: {},

@@ -17,6 +17,7 @@ import type { Player } from '@/lib/types';
 
 export type ChipLocation =
   | { kind: 'present' }
+  | { kind: 'break' }
   | { kind: 'court'; courtId: string }
   | { kind: 'queue' };
 
@@ -68,6 +69,8 @@ function ChipMenu({ player, location }: { player: Player; location: ChipLocation
   const queuePlayer = useTennisStore((s) => s.queuePlayer);
   const removeFromCourt = useTennisStore((s) => s.removeFromCourt);
   const removeFromQueue = useTennisStore((s) => s.removeFromQueue);
+  const takeBreak = useTennisStore((s) => s.takeBreak);
+  const endBreak = useTennisStore((s) => s.endBreak);
 
   return (
     <DropdownMenu>
@@ -104,7 +107,15 @@ function ChipMenu({ player, location }: { player: Player; location: ChipLocation
             <DropdownMenuItem onSelect={() => queuePlayer(player.id)}>
               Add to queue
             </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => takeBreak(player.id)}>
+              Take a tea break
+            </DropdownMenuItem>
           </>
+        )}
+        {location.kind === 'break' && (
+          <DropdownMenuItem onSelect={() => endBreak(player.id)}>
+            Back from break
+          </DropdownMenuItem>
         )}
         {location.kind === 'court' && (
           <DropdownMenuItem
@@ -118,14 +129,10 @@ function ChipMenu({ player, location }: { player: Player; location: ChipLocation
             Remove from queue
           </DropdownMenuItem>
         )}
-        {(location.kind === 'court' || location.kind === 'queue' || location.kind === 'present') && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => unmarkPresent(player.id)}>
-              Remove from today
-            </DropdownMenuItem>
-          </>
-        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => unmarkPresent(player.id)}>
+          Remove from today
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -135,6 +142,8 @@ function locationToString(loc: ChipLocation): string {
   switch (loc.kind) {
     case 'present':
       return 'present';
+    case 'break':
+      return 'break';
     case 'court':
       return `court:${loc.courtId}`;
     case 'queue':
