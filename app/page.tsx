@@ -77,15 +77,13 @@ export default function Page() {
           <SignInScreen />
         ) : (
           <>
-            <div className="flex flex-col gap-3 xl:flex-row">
-              {/* Breakpoints assume the fixed set of 3 courts. */}
-              <section className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {courts.map((c) => (
-                  <CourtCard key={c.id} court={c} />
-                ))}
-              </section>
-              <QueuePanel className="xl:w-72 xl:shrink-0" />
-            </div>
+            {/* Breakpoints assume the fixed set of 3 courts. */}
+            <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {courts.map((c) => (
+                <CourtCard key={c.id} court={c} />
+              ))}
+            </section>
+            <QueuePanel />
             <div className="flex flex-col gap-3 lg:flex-row">
               <BreakPanel className="lg:w-64 lg:shrink-0" />
               <PresentPanel className="flex-1" />
